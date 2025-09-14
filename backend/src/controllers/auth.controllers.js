@@ -2,6 +2,8 @@ import { generateToken } from "../lib/utils.js"
 import User from "../models/User.js"; 
 import bcrypt from "bcryptjs"
 
+import {saneWelcomeEmail} from "../emails/emailHandler.js"
+import { ENV } from "../lib/env.js";
 
 export const signup = async (req, res) => {
 
@@ -13,7 +15,7 @@ export const signup = async (req, res) => {
             return res.status(400).json({ message: "All fields are required" })
         }
 
-        if (password.lengt < 6) {
+        if (password.length < 6) {
             return res.status(400).json({ message: "Password must be at least 6 charachters" })
         }
 
@@ -46,12 +48,18 @@ export const signup = async (req, res) => {
 
             res.status(201).json({
                 _id: newUser._id,
-                fullnName: newUser.fullname,
+                fullName: newUser.fullname,
                 email: newUser.email, 
                 profilePic: newUser.profilePic
             })
 
             // todo: send a welcome email to user 
+
+            try{
+                await saneWelcomeEmail(savedUser.email, savedUser.fullname, ENV.CLIENT_URL); 
+            }catch (error) {
+                console.log("Failed to send welcome email:", error)
+            }
         } else{
             res.status(400).json({message: "invalid user data"})
         }
@@ -60,3 +68,4 @@ export const signup = async (req, res) => {
         res.status(500).json({message: "Internal server error"})
     }
 }
+
