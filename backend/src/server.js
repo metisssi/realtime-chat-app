@@ -1,4 +1,5 @@
 import express from "express"
+import cookieParser from "cookie-parser"
 import path from "path"
 
 
@@ -14,7 +15,9 @@ const app = express();
 
 const PORT = ENV.PORT || 3000 
 
+
 app.use(express.json()) // req.body
+app.use(cookieParser())
 
 const __dirname = path.resolve();
 

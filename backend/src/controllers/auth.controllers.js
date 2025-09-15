@@ -1,9 +1,11 @@
 import { generateToken } from "../lib/utils.js"
-import User from "../models/User.js"; 
+import User from "../models/User.js";
 import bcrypt from "bcryptjs"
 
-import {saneWelcomeEmail} from "../emails/emailHandler.js"
+import { saneWelcomeEmail } from "../emails/emailHandler.js"
 import { ENV } from "../lib/env.js";
+import cloudinary from "../lib/cloudinary.js";
+
 
 export const signup = async (req, res) => {
 
@@ -25,9 +27,9 @@ export const signup = async (req, res) => {
             return res.status(400).json({ message: "Invalid email format" });
         }
 
-        const user = await User.findOne({email})
+        const user = await User.findOne({ email })
 
-        if( user ) return res.status(400).json({message: "Email Alredy exists"})
+        if (user) return res.status(400).json({ message: "Email Alredy exists" })
 
         // 123456 =>  $dn
 
@@ -37,75 +39,98 @@ export const signup = async (req, res) => {
 
         const newUser = new User({
             fullname,
-            email, 
+            email,
             password: hashedPassword
         })
 
-        if(newUser) {
+        if (newUser) {
             // Presist user first, then issues auth cookie
             const savedUser = await newUser.save()
-            generateToken(savedUser._id, res) 
+            generateToken(savedUser._id, res)
 
             res.status(201).json({
                 _id: newUser._id,
                 fullName: newUser.fullname,
-                email: newUser.email, 
+                email: newUser.email,
                 profilePic: newUser.profilePic
             })
 
             // todo: send a welcome email to user 
 
-            try{
-                await saneWelcomeEmail(savedUser.email, savedUser.fullname, ENV.CLIENT_URL); 
-            }catch (error) {
+            try {
+                await saneWelcomeEmail(savedUser.email, savedUser.fullname, ENV.CLIENT_URL);
+            } catch (error) {
                 console.log("Failed to send welcome email:", error)
             }
-        } else{
-            res.status(400).json({message: "invalid user data"})
+        } else {
+            res.status(400).json({ message: "invalid user data" })
         }
     } catch (error) {
         console.log("Error in sighup controller:", error)
-        res.status(500).json({message: "Internal server error"})
+        res.status(500).json({ message: "Internal server error" })
     }
 }
 
 
 export const login = async (req, res) => {
-    const  { email, password} = req.body
+    const { email, password } = req.body
 
-    if(!email || !password) {
-        return res.status(400).json({message: "Email and password are required"})
+    if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" })
     }
 
     try {
-        const user = await User.findOne({email})
+        const user = await User.findOne({ email })
 
-        if(!user) {
-            return res.status(400).json({message: "Invalid Credentials"})
+        if (!user) {
+            return res.status(400).json({ message: "Invalid Credentials" })
             // never tell the client which one is incorrect: passwrod or email 
         }
 
         const isPasswordCorrect = await bcrypt.compare(password, user.password)
 
-        if(!isPasswordCorrect) return res.status(400).json({message: "Invalid Credentials"})
-        
+        if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid Credentials" })
+
         generateToken(user._id, res)
 
         res.status(200).json({
             _id: user._id,
             fullname: user.fullname,
-            email: user.email, 
-            profilePic: user.profilePic, 
+            email: user.email,
+            profilePic: user.profilePic,
         })
-    } catch( error) {   
+    } catch (error) {
         console.error("Error in login controller:", error)
-        res.status(500).json({message: "Internal server error"})
+        res.status(500).json({ message: "Internal server error" })
     }
 }
 
 
 export const logout = (_, res) => {
-    res.cookie("jwt", "", {maxAge: 0})
-    res.status(200).json({message: "Logged out successfully"})
+    res.cookie("jwt", "", { maxAge: 0 })
+    res.status(200).json({ message: "Logged out successfully" })
 }
- 
+
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { profilePic } = req.body
+
+        if (!profilePic) return res.status(400).json({ message: "Profile pic is required" })
+
+        const userId = req.user._id
+
+        const uploadResponse = await cloudinary.uploader.upload(profilePic)
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId, 
+            { profilePic: uploadResponse.secure_url },
+            { new: true }
+        );
+
+        res.status(200).json(updatedUser)
+    } catch (error) {
+        console.log('Error in update profile:', error)
+        res.status(500)({message: "Intenal server error"})
+    }
+}
