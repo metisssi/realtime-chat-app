@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { saneWelcomeEmail } from "../emails/emailHandler.js"
 import { ENV } from "../lib/env.js";
 import cloudinary from "../lib/cloudinary.js";
+import Message from "../models/Message.js";
 
 
 export const signup = async (req, res) => {
@@ -123,7 +124,7 @@ export const updateProfile = async (req, res) => {
         const uploadResponse = await cloudinary.uploader.upload(profilePic)
 
         const updatedUser = await User.findByIdAndUpdate(
-            userId, 
+            userId,
             { profilePic: uploadResponse.secure_url },
             { new: true }
         );
@@ -131,6 +132,8 @@ export const updateProfile = async (req, res) => {
         res.status(200).json(updatedUser)
     } catch (error) {
         console.log('Error in update profile:', error)
-        res.status(500)({message: "Intenal server error"})
+        res.status(500)({ message: "Intenal server error" })
     }
 }
+
+
