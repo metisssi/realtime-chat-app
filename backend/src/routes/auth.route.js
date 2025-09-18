@@ -8,7 +8,8 @@ const router = express.Router()
 router.use(arcjetProtection); 
 
 
-router.post("/sighup", signup)
+router.post("/signup", signup)
+
 router.post("/login", login)
 router.post("/logout", logout)
 
