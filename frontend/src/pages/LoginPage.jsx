@@ -9,7 +9,7 @@ import { Link } from "react-router-dom"
 function LoginPage() {
 
     const [formData, setFormData] = useState({ email: "", password: "" })
-    const { login, isLogginIn } = useAuthStore()
+    const { login, isLoggingIn } = useAuthStore()
 
     const handleSubmit = (e) => {
         e.preventDefault()
@@ -76,8 +76,8 @@ function LoginPage() {
                                 </div>
 
                                 {/* SUBMIT BUTTON*/}
-                                <button className="auth-btn" type="submit" disabled={isLogginIn}>
-                                    {isLogginIn ? (
+                                <button className="auth-btn" type="submit" disabled={isLoggingIn}>
+                                    {isLoggingIn ? (
                                         <LoaderIcon className="w-full h-5 animate-spin text-center" />
                                     ) : (
                                         "Sign in"
