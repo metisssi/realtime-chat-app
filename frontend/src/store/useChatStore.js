@@ -13,19 +13,21 @@ export const useChatStore = create((set, get) => ({
     isMessagesLoading: false,
     isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) === true,
 
-
     toggleSound: () => {
-        localStorage.setItem("isSoundEnabled", !get().isSoundEnabled)
-        set({ isSoundEnabled: !get().isSoundEnabled })
+        const newSoundState = !get().isSoundEnabled;
+        localStorage.setItem("isSoundEnabled", newSoundState);
+        set({ isSoundEnabled: newSoundState });
+        
+        // Переподписаться с новыми настройками звука
+        get().unsubscribeFromMessage();
+        get().subscribeToMessages();
     },
 
     setActiveTab: (tab) => set({ activeTab: tab }),
     setSelectedUser: (selectedUser) => set({ selectedUser }),
 
-
     getAllContacts: async () => {
         set({ isUsersLoading: true });
-
         try {
             const res = await axiosInstance.get("/messages/contacts")
             set({ allContacts: res.data });
@@ -35,6 +37,7 @@ export const useChatStore = create((set, get) => ({
             set({ isUsersLoading: false })
         }
     },
+
     getMyChatPartners: async () => {
         set({ isUsersLoading: true });
         try {
@@ -59,13 +62,9 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
-
     sendMessage: async (messageData) => {
-
         const { selectedUser, messages } = get()
-
         const { authUser } = useAuthStore.getState()
-
         const tempId = `temp-${Date.now()}`;
 
         const optimisticMessage = {
@@ -75,19 +74,57 @@ export const useChatStore = create((set, get) => ({
             text: messageData.text,
             image: messageData.image,
             createdAt: new Date().toISOString(),
-            isOptimistic: true, // flag to identify optimistic messages (optional)
+            isOptimistic: true,
         };
-        // immidetaly update the ui by adding the message
+
+        // Добавляем оптимистичное сообщение
         set({ messages: [...messages, optimisticMessage] });
+
         try {
             const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData)
-            set({ messages: messages.concat(res.data) })
-        } catch (error) {
-
-            // remove optimistic message  on failure
             
-            set[{ messages: messages }];
+            // Заменяем оптимистичное сообщение на реальное
+            const currentMessages = get().messages;
+            const updatedMessages = currentMessages.map(msg => 
+                msg._id === tempId ? res.data : msg
+            );
+            set({ messages: updatedMessages });
+
+        } catch (error) {
+            // Убираем оптимистичное сообщение при ошибке
+            const currentMessages = get().messages;
+            const filteredMessages = currentMessages.filter(msg => msg._id !== tempId);
+            set({ messages: filteredMessages });
+            
             toast.error(error.response?.data.message || "Something went wrong")
         }
-    }
+    },
+
+    subscribeToMessages: () => {
+        const { selectedUser } = get();
+        if (!selectedUser) return;
+
+        const socket = useAuthStore.getState().socket;
+
+        socket.on("newMessage", (newMessage) => {
+            const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
+            if (!isMessageSentFromSelectedUser) return;
+
+            const currentMessages = get().messages;
+            set({ messages: [...currentMessages, newMessage] });
+
+            // Получаем актуальное состояние звука
+            const { isSoundEnabled } = get();
+            if (isSoundEnabled) {
+                const notificationSound = new Audio("/sounds/notification.mp3");
+                notificationSound.currentTime = 0;
+                notificationSound.play().catch((e) => console.log("Audio play failed:", e));
+            }
+        });
+    },
+
+    unsubscribeFromMessage: () => {
+        const socket = useAuthStore.getState().socket;
+        socket.off("newMessage")
+    },
 }))
