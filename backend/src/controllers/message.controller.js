@@ -48,12 +48,17 @@ export const getMessagesByUserId = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
     try {
+
+        
         const { text, image } = req.body;
-        const { id: receiverId } = req.params
-        const senderId = req.user._id
+        const { id: receiverId } = req.params;
+        const senderId = req.user._id;
+
+        
+
 
         if(!text && !image) {
-            return res.status(400).josn({ message: "Text or image is required"})
+            return res.status(400).json({ message: "Text or image is required"})
         }
 
         if (senderId.equals(receiverId)) {
