@@ -1,13 +1,15 @@
 import { useRef, useState } from "react";
 import keyBoardSound from "../hooks/useKeyboardSound"
 import { useChatStore } from "../store/useChatStore";
-import { ImageIcon, SendIcon, XIcon } from "lucide-react";
+import { ImageIcon, SendIcon, XIcon, MicIcon } from "lucide-react";
 import toast from "react-hot-toast";
+import VoiceRecorder from "./Voicerecorder";
 
 function MessageInput() {
     const { playRandomKeyStrokeSound } = keyBoardSound()
     const [text, setText] = useState("")
     const [imagePreview, setImagePreview] = useState(null)
+    const [isRecordingMode, setIsRecordingMode] = useState(false)
 
     const fileInputRef = useRef(null)
 
@@ -29,6 +31,14 @@ function MessageInput() {
         if (fileInputRef.current) fileInputRef.current.value = ""
     };
 
+    const handleAudioReady = ({ base64, duration }) => {
+        sendMessage({
+            audio: base64,
+            audioDuration: duration
+        });
+        setIsRecordingMode(false);
+    };
+
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (!file.type.startsWith("image/")) {
@@ -46,6 +56,17 @@ function MessageInput() {
         setImagePreview(null)
 
         if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+
+    if (isRecordingMode) {
+        return (
+            <div className="p-4 border-t border-slate-700/50">
+                <VoiceRecorder 
+                    onAudioReady={handleAudioReady}
+                    onCancel={() => setIsRecordingMode(false)}
+                />
+            </div>
+        );
     }
 
     return (
@@ -94,6 +115,14 @@ function MessageInput() {
                         }`}
                 >
                     <ImageIcon className="w-5 h-5" />
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setIsRecordingMode(true)}
+                    className="bg-slate-800/50 text-slate-400 hover:text-slate-200 rounded-lg px-4 transition-colors"
+                >
+                    <MicIcon className="w-5 h-5" />
                 </button>
 
                 <button
