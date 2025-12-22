@@ -5,7 +5,6 @@ import bcrypt from "bcryptjs"
 import { saneWelcomeEmail } from "../emails/emailHandler.js"
 import { ENV } from "../lib/env.js";
 import cloudinary from "../lib/cloudinary.js";
-import Message from "../models/Message.js";
 
 
 export const signup = async (req, res) => {
@@ -18,11 +17,32 @@ export const signup = async (req, res) => {
             return res.status(400).json({ message: "All fields are required" })
         }
 
+        // УСИЛЕННАЯ ВАЛИДАЦИЯ ПАРОЛЯ
         if (password.length < 6) {
-            return res.status(400).json({ message: "Password must be at least 6 charachters" })
+            return res.status(400).json({ message: "Password must be at least 6 characters" })
         }
 
-        // check if  emailis valid: regex
+        // Проверка на цифру
+        if (!/\d/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one number" })
+        }
+
+        // Проверка на заглавную букву
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one uppercase letter" })
+        }
+
+        // Проверка на строчную букву
+        if (!/[a-z]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one lowercase letter" })
+        }
+
+        // Опционально: проверка на спецсимвол (можешь раскомментировать)
+        // if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        //     return res.status(400).json({ message: "Password must contain at least one special character" })
+        // }
+
+        // check if email is valid: regex
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return res.status(400).json({ message: "Invalid email format" });
@@ -30,12 +50,10 @@ export const signup = async (req, res) => {
 
         const user = await User.findOne({ email })
 
-        if (user) return res.status(400).json({ message: "Email Alredy exists" })
+        if (user) return res.status(400).json({ message: "Email already exists" })
 
-        // 123456 =>  $dn
-
+        // Хеширование пароля с salt
         const salt = await bcrypt.genSalt(10)
-
         const hashedPassword = await bcrypt.hash(password, salt)
 
         const newUser = new User({
@@ -45,7 +63,7 @@ export const signup = async (req, res) => {
         })
 
         if (newUser) {
-            // Presist user first, then issues auth cookie
+            // Сохраняем пользователя, потом выдаем токен
             const savedUser = await newUser.save()
             generateToken(savedUser._id, res)
 
@@ -56,18 +74,17 @@ export const signup = async (req, res) => {
                 profilePic: newUser.profilePic
             })
 
-            // todo: send a welcome email to user 
-
+            // Отправка welcome email (уже работает)
             try {
                 await saneWelcomeEmail(savedUser.email, savedUser.fullname, ENV.CLIENT_URL);
             } catch (error) {
                 console.log("Failed to send welcome email:", error)
             }
         } else {
-            res.status(400).json({ message: "invalid user data" })
+            res.status(400).json({ message: "Invalid user data" })
         }
     } catch (error) {
-        console.log("Error in sighup controller:", error)
+        console.log("Error in signup controller:", error)
         res.status(500).json({ message: "Internal server error" })
     }
 }
@@ -85,7 +102,6 @@ export const login = async (req, res) => {
 
         if (!user) {
             return res.status(400).json({ message: "Invalid Credentials" })
-            // never tell the client which one is incorrect: passwrod or email 
         }
 
         const isPasswordCorrect = await bcrypt.compare(password, user.password)
@@ -132,8 +148,10 @@ export const updateProfile = async (req, res) => {
         res.status(200).json(updatedUser)
     } catch (error) {
         console.log('Error in update profile:', error)
-        res.status(500)({ message: "Intenal server error" })
+        res.status(500).json({ message: "Internal server error" })
     }
 }
+
+
 
 

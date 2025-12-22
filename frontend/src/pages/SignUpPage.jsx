@@ -1,15 +1,29 @@
 import { useState } from "react"
 import { useAuthStore } from "../store/useAuthStore"
 import BorderAnimatedContainer from "../components/BorderAnimatedContainer"
-import { MessageCircleIcon, LockIcon, MailIcon, UserIcon, LoaderIcon } from "lucide-react"
+import { MessageCircleIcon, LockIcon, MailIcon, UserIcon, LoaderIcon, CheckCircle2Icon, XCircleIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 
 function SignUpPage() {
     const [formData, setFormData] = useState({ fullname: "", email: "", password: "" })
     const { signup, isSigninUp } = useAuthStore()
 
+    // Проверка требований к паролю
+    const passwordRequirements = {
+        minLength: formData.password.length >= 6,
+        hasNumber: /\d/.test(formData.password),
+        hasUpperCase: /[A-Z]/.test(formData.password),
+        hasLowerCase: /[a-z]/.test(formData.password),
+    }
+
+    const isPasswordValid = Object.values(passwordRequirements).every(Boolean)
+
     const handleSubmit = (e) => {
         e.preventDefault()
+
+        if (!isPasswordValid) {
+            return // Не отправляем если пароль невалиден
+        }
 
         signup(formData)
     };
@@ -18,8 +32,8 @@ function SignUpPage() {
         <div className="relative w-full max-w-6xl min-h-[600px] md:h-[650px] lg:h-[800px]">
             <BorderAnimatedContainer>
                 <div className="w-full flex flex-col md:flex-row">
-                    {/* FORM CLOUMN - LEFT SIDE */}
-                    <div className="md:w-1/2 p-6 md:p-8 flex items-center justify-center md:border-r border-slate-600/30">
+                    {/* FORM COLUMN - LEFT SIDE */}
+                    <div className="md:w-1/2 p-6 md:p-8 flex items-center justify-center md:border-r border-slate-600/30 overflow-y-auto">
                         <div className="w-full max-w-md">
                             {/* HEADING TEXT */}
                             <div className="text-center mb-6 md:mb-8">
@@ -29,7 +43,7 @@ function SignUpPage() {
                             </div>
 
                             {/* FORM */}
-                            <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+                            <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
                                 {/*  FULL NAME */}
                                 <div>
                                     <label className="auth-input-label">Full Name</label>
@@ -44,6 +58,7 @@ function SignUpPage() {
                                             })}
                                             className="input text-sm md:text-base"
                                             placeholder="John Doe"
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -56,13 +71,14 @@ function SignUpPage() {
                                     <div className="relative">
                                         <MailIcon className="auth-input-icon" />
 
-                                        <input type="text"
+                                        <input type="email"
                                             value={formData.email}
                                             onChange={(e) => setFormData({
                                                 ...formData, email: e.target.value
                                             })}
                                             className="input text-sm md:text-base"
                                             placeholder="johndoe@gmail.com"
+                                            required
                                         />
                                     </div>
                                 </div>
@@ -70,7 +86,7 @@ function SignUpPage() {
 
                                 {/*  PASSWORD INPUT */}
                                 <div>
-                                    <label className="auth-input-label">Passowrd</label>
+                                    <label className="auth-input-label">Password</label>
 
                                     <div className="relative">
                                         <LockIcon className="auth-input-icon" />
@@ -81,13 +97,44 @@ function SignUpPage() {
                                                 ...formData, password: e.target.value
                                             })}
                                             className="input text-sm md:text-base"
-                                            placeholder="Enter yout password"
+                                            placeholder="Enter your password"
+                                            required
                                         />
                                     </div>
+
+                                    {/* PASSWORD REQUIREMENTS */}
+                                    {formData.password && (
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-xs text-slate-400 mb-2">Password must contain:</p>
+                                            
+                                            <div className="space-y-1">
+                                                <PasswordRequirement 
+                                                    met={passwordRequirements.minLength}
+                                                    text="At least 6 characters"
+                                                />
+                                                <PasswordRequirement 
+                                                    met={passwordRequirements.hasNumber}
+                                                    text="At least one number"
+                                                />
+                                                <PasswordRequirement 
+                                                    met={passwordRequirements.hasUpperCase}
+                                                    text="At least one uppercase letter"
+                                                />
+                                                <PasswordRequirement 
+                                                    met={passwordRequirements.hasLowerCase}
+                                                    text="At least one lowercase letter"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* SUBMIT BUTTON*/}
-                                <button className="auth-btn" type="submit" disabled={isSigninUp}>
+                                <button 
+                                    className="auth-btn" 
+                                    type="submit" 
+                                    disabled={isSigninUp || (formData.password && !isPasswordValid)}
+                                >
                                     {isSigninUp ? (
                                         <LoaderIcon className="w-full h-5 animate-spin text-center" />
                                     ) : (
@@ -119,7 +166,7 @@ function SignUpPage() {
                                 <div className="mt-4 flex justify-center gap-4">
                                     <span className="auth-badge">Free</span>
                                     <span className="auth-badge">Easy Setup</span>
-                                    <span className="auth-badge">Private</span>
+                                    <span className="auth-badge">Secure</span>
                                 </div>
                             </div>
                         </div>
@@ -128,6 +175,22 @@ function SignUpPage() {
             </BorderAnimatedContainer>
         </div>
     </div>
+}
+
+// Компонент для отображения требования к паролю
+function PasswordRequirement({ met, text }) {
+    return (
+        <div className="flex items-center gap-2 text-xs">
+            {met ? (
+                <CheckCircle2Icon className="w-4 h-4 text-green-500" />
+            ) : (
+                <XCircleIcon className="w-4 h-4 text-slate-500" />
+            )}
+            <span className={met ? "text-green-500" : "text-slate-500"}>
+                {text}
+            </span>
+        </div>
+    )
 }
 
 export default SignUpPage
