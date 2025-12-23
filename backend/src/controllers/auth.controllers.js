@@ -18,8 +18,33 @@ export const signup = async (req, res) => {
             return res.status(400).json({ message: "All fields are required" })
         }
 
-        if (password.length < 6) {
-            return res.status(400).json({ message: "Password must be at least 6 charachters" })
+        // Проверка требований к паролю
+        if (password.length < 8) {
+            return res.status(400).json({ message: "Password must be at least 8 characters" })
+        }
+
+        // Add a complexity check:
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+                message: "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+            })
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one uppercase letter" })
+        }
+
+        if (!/[a-z]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one lowercase letter" })
+        }
+
+        if (!/[0-9]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one number" })
+        }
+
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+            return res.status(400).json({ message: "Password must contain at least one special character" })
         }
 
         // check if  emailis valid: regex
@@ -135,5 +160,3 @@ export const updateProfile = async (req, res) => {
         res.status(500)({ message: "Intenal server error" })
     }
 }
-
-

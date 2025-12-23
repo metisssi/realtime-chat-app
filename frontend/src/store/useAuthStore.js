@@ -49,8 +49,19 @@ export const useAuthStore = create((set, get) => ({
                 errorMessage = error.message
             }
 
-            toast.error(errorMessage)
-            // toast.error(error.response.data.message)
+            // НЕ показываем toast для ошибок валидации пароля
+            const passwordValidationErrors = [
+                "Password must be at least 8 characters",
+                "Password must contain at least one uppercase letter",
+                "Password must contain at least one lowercase letter", 
+                "Password must contain at least one number",
+                "Password must contain at least one special character"
+            ]
+
+            // Показываем toast только для других ошибок (например, email уже существует)
+            if (!passwordValidationErrors.includes(errorMessage)) {
+                toast.error(errorMessage)
+            }
         } finally {
             set({ isSigninUp: false })
         }
@@ -67,7 +78,7 @@ export const useAuthStore = create((set, get) => ({
             get().connectSocket()
         } catch (error) {
 
-            console.log("Signup error:", error) // для отладки
+            console.log("Login error:", error) // для отладки
 
             // Безопасная обработка ошибки
             let errorMessage = "Something went wrong"
@@ -79,7 +90,6 @@ export const useAuthStore = create((set, get) => ({
             }
 
             toast.error(errorMessage)
-            // toast.error(error.response.data.message)
         } finally {
             set({ isLoggingIn: false })
         }
@@ -136,4 +146,3 @@ export const useAuthStore = create((set, get) => ({
 
 
 }));
-
