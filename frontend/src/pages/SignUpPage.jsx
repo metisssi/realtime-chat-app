@@ -1,38 +1,53 @@
 import { useState } from "react"
 import { useAuthStore } from "../store/useAuthStore"
 import BorderAnimatedContainer from "../components/BorderAnimatedContainer"
-import { MessageCircleIcon, LockIcon, MailIcon, UserIcon, LoaderIcon, CheckCircle2Icon, XCircleIcon } from "lucide-react"
+import { MessageCircleIcon, LockIcon, MailIcon, UserIcon, LoaderIcon, CheckIcon, XIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 
 function SignUpPage() {
-    const [formData, setFormData] = useState({ fullname: "", email: "", password: "" })
+    const [formData, setFormData] = useState({ 
+        fullname: "", 
+        email: "", 
+        password: "",
+        confirmPassword: "" 
+    })
+    
+    const [showPasswordHints, setShowPasswordHints] = useState(false)
     const { signup, isSigninUp } = useAuthStore()
 
     // Проверка требований к паролю
     const passwordRequirements = {
-        minLength: formData.password.length >= 6,
-        hasNumber: /\d/.test(formData.password),
+        minLength: formData.password.length >= 8,
         hasUpperCase: /[A-Z]/.test(formData.password),
         hasLowerCase: /[a-z]/.test(formData.password),
+        hasNumber: /[0-9]/.test(formData.password),
+        hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(formData.password),
     }
 
-    const isPasswordValid = Object.values(passwordRequirements).every(Boolean)
+    const passwordsMatch = formData.password && formData.confirmPassword && formData.password === formData.confirmPassword
+    const allRequirementsMet = Object.values(passwordRequirements).every(Boolean)
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
 
-        if (!isPasswordValid) {
-            return // Не отправляем если пароль невалиден
+        if (!allRequirementsMet) {
+            return
         }
 
-        signup(formData)
+        if (!passwordsMatch) {
+            return
+        }
+
+        // Отправляем только нужные поля
+        const { confirmPassword, ...signupData } = formData
+        await signup(signupData)
     };
 
     return <div className="w-full flex items-center justify-center p-2 md:p-4 bg-slate-900">
         <div className="relative w-full max-w-6xl min-h-[600px] md:h-[650px] lg:h-[800px]">
             <BorderAnimatedContainer>
                 <div className="w-full flex flex-col md:flex-row">
-                    {/* FORM COLUMN - LEFT SIDE */}
+                    {/* FORM CLOUMN - LEFT SIDE */}
                     <div className="md:w-1/2 p-6 md:p-8 flex items-center justify-center md:border-r border-slate-600/30 overflow-y-auto">
                         <div className="w-full max-w-md">
                             {/* HEADING TEXT */}
@@ -91,11 +106,13 @@ function SignUpPage() {
                                     <div className="relative">
                                         <LockIcon className="auth-input-icon" />
 
-                                        <input type="password"
+                                        <input 
+                                            type="password"
                                             value={formData.password}
                                             onChange={(e) => setFormData({
                                                 ...formData, password: e.target.value
                                             })}
+                                            onFocus={() => setShowPasswordHints(true)}
                                             className="input text-sm md:text-base"
                                             placeholder="Enter your password"
                                             required
@@ -103,29 +120,73 @@ function SignUpPage() {
                                     </div>
 
                                     {/* PASSWORD REQUIREMENTS */}
-                                    {formData.password && (
-                                        <div className="mt-3 space-y-2">
+                                    {showPasswordHints && formData.password && (
+                                        <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 space-y-2">
                                             <p className="text-xs text-slate-400 mb-2">Password must contain:</p>
                                             
-                                            <div className="space-y-1">
-                                                <PasswordRequirement 
-                                                    met={passwordRequirements.minLength}
-                                                    text="At least 6 characters"
-                                                />
-                                                <PasswordRequirement 
-                                                    met={passwordRequirements.hasNumber}
-                                                    text="At least one number"
-                                                />
-                                                <PasswordRequirement 
-                                                    met={passwordRequirements.hasUpperCase}
-                                                    text="At least one uppercase letter"
-                                                />
-                                                <PasswordRequirement 
-                                                    met={passwordRequirements.hasLowerCase}
-                                                    text="At least one lowercase letter"
-                                                />
-                                            </div>
+                                            <PasswordRequirement 
+                                                met={passwordRequirements.minLength}
+                                                text="At least 8 characters"
+                                            />
+                                            <PasswordRequirement 
+                                                met={passwordRequirements.hasUpperCase}
+                                                text="One uppercase letter (A-Z)"
+                                            />
+                                            <PasswordRequirement 
+                                                met={passwordRequirements.hasLowerCase}
+                                                text="One lowercase letter (a-z)"
+                                            />
+                                            <PasswordRequirement 
+                                                met={passwordRequirements.hasNumber}
+                                                text="One number (0-9)"
+                                            />
+                                            <PasswordRequirement 
+                                                met={passwordRequirements.hasSpecialChar}
+                                                text="One special character (!@#$%...)"
+                                            />
                                         </div>
+                                    )}
+                                </div>
+
+                                {/*  CONFIRM PASSWORD INPUT */}
+                                <div>
+                                    <label className="auth-input-label">Confirm Password</label>
+
+                                    <div className="relative">
+                                        <LockIcon className="auth-input-icon" />
+
+                                        <input 
+                                            type="password"
+                                            value={formData.confirmPassword}
+                                            onChange={(e) => setFormData({
+                                                ...formData, confirmPassword: e.target.value
+                                            })}
+                                            className={`input text-sm md:text-base ${
+                                                formData.confirmPassword && !passwordsMatch 
+                                                    ? 'border-red-500 focus:ring-red-500' 
+                                                    : formData.confirmPassword && passwordsMatch 
+                                                    ? 'border-green-500 focus:ring-green-500' 
+                                                    : ''
+                                            }`}
+                                            placeholder="Confirm your password"
+                                            required
+                                        />
+
+                                        {/* CHECKMARK OR X ICON */}
+                                        {formData.confirmPassword && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                {passwordsMatch ? (
+                                                    <CheckIcon className="w-5 h-5 text-green-500" />
+                                                ) : (
+                                                    <XIcon className="w-5 h-5 text-red-500" />
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* PASSWORD MATCH MESSAGE */}
+                                    {formData.confirmPassword && !passwordsMatch && (
+                                        <p className="text-xs text-red-400 mt-1">Passwords do not match</p>
                                     )}
                                 </div>
 
@@ -133,7 +194,7 @@ function SignUpPage() {
                                 <button 
                                     className="auth-btn" 
                                     type="submit" 
-                                    disabled={isSigninUp || (formData.password && !isPasswordValid)}
+                                    disabled={isSigninUp || !allRequirementsMet || !passwordsMatch || !formData.fullname || !formData.email}
                                 >
                                     {isSigninUp ? (
                                         <LoaderIcon className="w-full h-5 animate-spin text-center" />
@@ -166,7 +227,7 @@ function SignUpPage() {
                                 <div className="mt-4 flex justify-center gap-4">
                                     <span className="auth-badge">Free</span>
                                     <span className="auth-badge">Easy Setup</span>
-                                    <span className="auth-badge">Secure</span>
+                                    <span className="auth-badge">Private</span>
                                 </div>
                             </div>
                         </div>
@@ -177,16 +238,16 @@ function SignUpPage() {
     </div>
 }
 
-// Компонент для отображения требования к паролю
+// Компонент для отображения требований к паролю
 function PasswordRequirement({ met, text }) {
     return (
-        <div className="flex items-center gap-2 text-xs">
-            {met ? (
-                <CheckCircle2Icon className="w-4 h-4 text-green-500" />
-            ) : (
-                <XCircleIcon className="w-4 h-4 text-slate-500" />
-            )}
-            <span className={met ? "text-green-500" : "text-slate-500"}>
+        <div className="flex items-center gap-2">
+            <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-colors ${
+                met ? 'bg-green-500' : 'bg-slate-700'
+            }`}>
+                {met && <CheckIcon className="w-3 h-3 text-white" />}
+            </div>
+            <span className={`text-xs transition-colors ${met ? 'text-green-400' : 'text-slate-400'}`}>
                 {text}
             </span>
         </div>

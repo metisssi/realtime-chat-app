@@ -2,6 +2,17 @@ import express from "express"
 import { signup, login, logout, updateProfile } from "../controllers/auth.controllers.js"
 import { protectRoute } from "../middleware/auth.middleware.js"
 import { arcjetProtection } from "../middleware/arcjet.middleware.js"
+import { slidingWindow } from "@arcjet/node";
+
+
+
+const authLimiter = slidingWindow({
+    mode: "LIVE",
+    max: 5, // only 5 attempts
+    interval: "15m", // in 15 minutes
+});
+
+
 const router = express.Router()
 
 
