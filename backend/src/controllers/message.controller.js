@@ -1,7 +1,6 @@
 import cloudinary from "../lib/cloudinary.js"
 import { getRecieverSocketId, io } from "../lib/socket.js"
 import Message from "../models/Message.js"
-
 import User from "../models/User.js"
 
 export const getAllContacts = async (req, res) => {
@@ -19,8 +18,6 @@ export const getAllContacts = async (req, res) => {
         res.status(500).json({ message: "Server error" })
     }
 }
-
-
 
 export const getMessagesByUserId = async (req, res) => {
     try {
@@ -46,33 +43,24 @@ export const getMessagesByUserId = async (req, res) => {
     }
 }
 
-
 export const sendMessage = async (req, res) => {
     try {
-
-        
         const { text, image, audio, audioDuration } = req.body;
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
-
-        
-
 
         if(!text && !image && !audio) {
             return res.status(400).json({ message: "Text, image or audio is required"})
         }
 
         if (senderId.equals(receiverId)) {
-            return res.status(404).json({ message: "Recevier not found"})
+            return res.status(404).json({ message: "Receiver not found"})
         }
 
         const receiverExists = await User.exists({ _id: receiverId})
         if(!receiverExists) {
-            return res.status(400).json({ message: 'Recevier not found.'})
+            return res.status(400).json({ message: 'Receiver not found.'})
         }
-
-
-
 
         let imageUrl
         let audioUrl
@@ -83,11 +71,23 @@ export const sendMessage = async (req, res) => {
         }
 
         if (audio) {
-            const uploadResponse = await cloudinary.uploader.upload(audio, {
-                resource_type: "video", // Cloudinary использует "video" для аудио файлов
-                format: "mp3"
-            })
-            audioUrl = uploadResponse.secure_url
+            try {
+                // Загружаем аудио и конвертируем в MP3 для лучшей совместимости
+                const uploadResponse = await cloudinary.uploader.upload(audio, {
+                    resource_type: "video",
+                    format: "mp3", // Конвертируем в MP3
+                    audio_codec: "mp3",
+                    chunk_size: 6000000,
+                })
+                audioUrl = uploadResponse.secure_url
+                console.log("Audio uploaded and converted to MP3:", audioUrl)
+            } catch (uploadError) {
+                console.error("Audio upload error:", uploadError)
+                return res.status(500).json({ 
+                    message: "Failed to upload audio file",
+                    error: uploadError.message 
+                })
+            }
         }
 
         const newMessage = new Message({
@@ -101,8 +101,6 @@ export const sendMessage = async (req, res) => {
 
         await newMessage.save();
 
-
-
         const recieverSocketId = getRecieverSocketId(receiverId)
 
         if(recieverSocketId) {
@@ -115,9 +113,6 @@ export const sendMessage = async (req, res) => {
         res.status(500).json({ error: "Internal server error" })
     }
 }
-
-
-
 
 export const getChatPartners = async (req, res) => {
   try {
