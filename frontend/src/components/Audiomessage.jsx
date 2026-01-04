@@ -31,21 +31,13 @@ function AudioMessage({ audioUrl, duration, isSent }) {
         const handleCanPlay = () => {
             setIsLoading(false);
             setError(false);
-            console.log("Audio can play:", audioUrl);
         };
 
         const handleError = (e) => {
-            console.error("Audio playback error:", e);
-            console.error("Audio URL:", audioUrl);
+            console.error("Audio error:", e);
             setError(true);
             setIsLoading(false);
-            setIsPlaying(false);
             toast.error("Failed to load audio");
-        };
-
-        const handleLoadStart = () => {
-            setIsLoading(true);
-            console.log("Loading audio:", audioUrl);
         };
 
         audio.addEventListener("timeupdate", updateTime);
@@ -53,10 +45,6 @@ function AudioMessage({ audioUrl, duration, isSent }) {
         audio.addEventListener("ended", handleEnded);
         audio.addEventListener("canplay", handleCanPlay);
         audio.addEventListener("error", handleError);
-        audio.addEventListener("loadstart", handleLoadStart);
-
-        // Явно загружаем аудио
-        audio.load();
 
         return () => {
             audio.removeEventListener("timeupdate", updateTime);
@@ -64,7 +52,6 @@ function AudioMessage({ audioUrl, duration, isSent }) {
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("canplay", handleCanPlay);
             audio.removeEventListener("error", handleError);
-            audio.removeEventListener("loadstart", handleLoadStart);
         };
     }, [audioUrl]);
 
@@ -77,26 +64,8 @@ function AudioMessage({ audioUrl, duration, isSent }) {
                 audio.pause();
                 setIsPlaying(false);
             } else {
-                // Логируем подробности перед воспроизведением
-                console.log("Attempting to play audio");
-                console.log("Audio ready state:", audio.readyState);
-                console.log("Audio network state:", audio.networkState);
-                console.log("Audio duration:", audio.duration);
-                console.log("Audio paused:", audio.paused);
-                
-                // Пробуем воспроизвести
-                const playPromise = audio.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        console.log("Audio started playing successfully");
-                        setIsPlaying(true);
-                    }).catch((err) => {
-                        console.error("Play failed:", err);
-                        setError(true);
-                        toast.error("Failed to play audio: " + err.message);
-                    });
-                }
+                await audio.play();
+                setIsPlaying(true);
             }
         } catch (err) {
             console.error("Playback error:", err);
