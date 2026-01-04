@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { PlayIcon, PauseIcon } from "lucide-react";
+import toast from "react-hot-toast";
 
 function AudioMessage({ audioUrl, duration, isSent }) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [audioDuration, setAudioDuration] = useState(duration || 0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(false);
     const audioRef = useRef(null);
 
     useEffect(() => {
@@ -12,38 +15,99 @@ function AudioMessage({ audioUrl, duration, isSent }) {
         if (!audio) return;
 
         const updateTime = () => setCurrentTime(audio.currentTime);
-        const updateDuration = () => setAudioDuration(audio.duration);
+        
+        const updateDuration = () => {
+            if (audio.duration && !isNaN(audio.duration)) {
+                setAudioDuration(audio.duration);
+            }
+            setIsLoading(false);
+        };
+        
         const handleEnded = () => {
             setIsPlaying(false);
             setCurrentTime(0);
         };
 
+        const handleCanPlay = () => {
+            setIsLoading(false);
+            setError(false);
+            console.log("Audio can play:", audioUrl);
+        };
+
+        const handleError = (e) => {
+            console.error("Audio playback error:", e);
+            console.error("Audio URL:", audioUrl);
+            setError(true);
+            setIsLoading(false);
+            setIsPlaying(false);
+            toast.error("Failed to load audio");
+        };
+
+        const handleLoadStart = () => {
+            setIsLoading(true);
+            console.log("Loading audio:", audioUrl);
+        };
+
         audio.addEventListener("timeupdate", updateTime);
         audio.addEventListener("loadedmetadata", updateDuration);
         audio.addEventListener("ended", handleEnded);
+        audio.addEventListener("canplay", handleCanPlay);
+        audio.addEventListener("error", handleError);
+        audio.addEventListener("loadstart", handleLoadStart);
+
+        // Явно загружаем аудио
+        audio.load();
 
         return () => {
             audio.removeEventListener("timeupdate", updateTime);
             audio.removeEventListener("loadedmetadata", updateDuration);
             audio.removeEventListener("ended", handleEnded);
+            audio.removeEventListener("canplay", handleCanPlay);
+            audio.removeEventListener("error", handleError);
+            audio.removeEventListener("loadstart", handleLoadStart);
         };
-    }, []);
+    }, [audioUrl]);
 
-    const togglePlayPause = () => {
+    const togglePlayPause = async () => {
         const audio = audioRef.current;
-        if (!audio) return;
+        if (!audio || error) return;
 
-        if (isPlaying) {
-            audio.pause();
-        } else {
-            audio.play();
+        try {
+            if (isPlaying) {
+                audio.pause();
+                setIsPlaying(false);
+            } else {
+                // Логируем подробности перед воспроизведением
+                console.log("Attempting to play audio");
+                console.log("Audio ready state:", audio.readyState);
+                console.log("Audio network state:", audio.networkState);
+                console.log("Audio duration:", audio.duration);
+                console.log("Audio paused:", audio.paused);
+                
+                // Пробуем воспроизвести
+                const playPromise = audio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log("Audio started playing successfully");
+                        setIsPlaying(true);
+                    }).catch((err) => {
+                        console.error("Play failed:", err);
+                        setError(true);
+                        toast.error("Failed to play audio: " + err.message);
+                    });
+                }
+            }
+        } catch (err) {
+            console.error("Playback error:", err);
+            setError(true);
+            toast.error("Failed to play audio");
         }
-        setIsPlaying(!isPlaying);
     };
 
     const handleSeek = (e) => {
         const audio = audioRef.current;
-        if (!audio) return;
+        if (!audio || error) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -52,7 +116,7 @@ function AudioMessage({ audioUrl, duration, isSent }) {
     };
 
     const formatTime = (seconds) => {
-        if (isNaN(seconds)) return "0:00";
+        if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -64,17 +128,26 @@ function AudioMessage({ audioUrl, duration, isSent }) {
         <div className={`flex items-center gap-3 p-3 rounded-lg min-w-[250px] ${
             isSent ? 'bg-cyan-600' : 'bg-slate-800'
         }`}>
-            <audio ref={audioRef} src={audioUrl} />
+            <audio 
+                ref={audioRef} 
+                src={audioUrl}
+                preload="metadata"
+            />
             
             <button
                 onClick={togglePlayPause}
+                disabled={isLoading || error}
                 className={`p-2 rounded-full transition-colors ${
                     isSent 
                         ? 'bg-cyan-700 hover:bg-cyan-800' 
                         : 'bg-slate-700 hover:bg-slate-600'
-                }`}
+                } ${(isLoading || error) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-                {isPlaying ? (
+                {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : error ? (
+                    <span className="text-xs">❌</span>
+                ) : isPlaying ? (
                     <PauseIcon className="w-5 h-5 text-white" />
                 ) : (
                     <PlayIcon className="w-5 h-5 text-white" />
@@ -83,8 +156,10 @@ function AudioMessage({ audioUrl, duration, isSent }) {
 
             <div className="flex-1 space-y-1">
                 <div 
-                    className="h-1 bg-slate-700/30 rounded-full cursor-pointer overflow-hidden"
-                    onClick={handleSeek}
+                    className={`h-1 bg-slate-700/30 rounded-full overflow-hidden ${
+                        !error ? 'cursor-pointer' : 'cursor-not-allowed'
+                    }`}
+                    onClick={!error ? handleSeek : undefined}
                 >
                     <div 
                         className={`h-full rounded-full transition-all ${
