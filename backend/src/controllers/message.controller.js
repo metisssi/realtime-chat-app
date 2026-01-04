@@ -6,12 +6,9 @@ import User from "../models/User.js"
 export const getAllContacts = async (req, res) => {
     try {
         const loggedInUserId = req.user._id
-
-        // Not equal to 
         const filteredUsers = await User.find({
             _id: { $ne: loggedInUserId }
         }).select("-password")
-
         res.status(200).json(filteredUsers)
     } catch (error) {
         console.log("Error in getAllContact:", error);
@@ -23,20 +20,13 @@ export const getMessagesByUserId = async (req, res) => {
     try {
         const myId = req.user._id;
         const { id: userToChatId } = req.params
-
-        // me and you 
-        // i send you the message
-        // you send me the message
-
         const message = await Message.find({
             $or: [
                 { senderId: myId, receiverId: userToChatId },
                 { senderId: userToChatId, receiverId: myId },
             ]
         });
-
         res.status(200).json(message)
-
     } catch (error) {
         console.log("Error in getMessage controller:", error.message)
         res.status(500).json({ error: "Internal server error" })
@@ -72,19 +62,20 @@ export const sendMessage = async (req, res) => {
 
         if (audio) {
             try {
-                // Загружаем аудио и конвертируем в MP3 для лучшей совместимости
+                console.log("Uploading WAV audio to Cloudinary...");
+                
+                // Загружаем WAV файл
                 const uploadResponse = await cloudinary.uploader.upload(audio, {
                     resource_type: "video",
-                    format: "mp3", // Конвертируем в MP3
-                    audio_codec: "mp3",
-                    chunk_size: 6000000,
+                    format: "wav"
                 })
+                
                 audioUrl = uploadResponse.secure_url
-                console.log("Audio uploaded and converted to MP3:", audioUrl)
+                console.log("WAV audio uploaded:", audioUrl)
             } catch (uploadError) {
-                console.error("Audio upload error:", uploadError)
+                console.error("Upload error:", uploadError)
                 return res.status(500).json({ 
-                    message: "Failed to upload audio file",
+                    message: "Failed to upload audio",
                     error: uploadError.message 
                 })
             }
@@ -102,7 +93,6 @@ export const sendMessage = async (req, res) => {
         await newMessage.save();
 
         const recieverSocketId = getRecieverSocketId(receiverId)
-
         if(recieverSocketId) {
             io.to(recieverSocketId).emit("newMessage", newMessage)
         }
@@ -117,8 +107,6 @@ export const sendMessage = async (req, res) => {
 export const getChatPartners = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-
-    // find all the messages where the logged-in user is either sender or receiver
     const messages = await Message.find({
       $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }],
     });
@@ -134,7 +122,6 @@ export const getChatPartners = async (req, res) => {
     ];
 
     const chatPartners = await User.find({ _id: { $in: chatPartnerIds } }).select("-password");
-
     res.status(200).json(chatPartners);
   } catch (error) {
     console.error("Error in getChatPartners: ", error.message);

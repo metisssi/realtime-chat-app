@@ -5,54 +5,19 @@ import toast from "react-hot-toast";
 function VoiceRecorder({ onAudioReady, onCancel }) {
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
-    const [permissionGranted, setPermissionGranted] = useState(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
+    const audioContextRef = useRef(null);
     const timerRef = useRef(null);
     const streamRef = useRef(null);
-    const audioContextRef = useRef(null);
 
-    useEffect(() => {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            toast.error("Your browser doesn't support audio recording");
-            setPermissionGranted(false);
-        }
-    }, []);
-
-    // Конвертация в WAV формат
-    const convertToWav = async (audioBlob) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = async () => {
-                try {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const arrayBuffer = reader.result;
-                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                    
-                    // Конвертируем в WAV
-                    const wavBuffer = audioBufferToWav(audioBuffer);
-                    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-                    
-                    resolve(wavBlob);
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            reader.onerror = reject;
-            reader.readAsArrayBuffer(audioBlob);
-        });
-    };
-
-    // Конвертация AudioBuffer в WAV
+    // Конвертация в WAV
     const audioBufferToWav = (buffer) => {
         const length = buffer.length * buffer.numberOfChannels * 2 + 44;
-        const arrayBuffer = new ArrayBuffer(length);
-        const view = new DataView(arrayBuffer);
-        const channels = [];
-        let offset = 0;
+        const wav = new ArrayBuffer(length);
+        const view = new DataView(wav);
+        
         let pos = 0;
-
-        // WAV header
         const setUint16 = (data) => {
             view.setUint16(pos, data, true);
             pos += 2;
@@ -62,38 +27,28 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
             pos += 4;
         };
 
-        // RIFF identifier
-        setUint32(0x46464952);
-        // file length
-        setUint32(length - 8);
-        // RIFF type
-        setUint32(0x45564157);
-        // format chunk identifier
-        setUint32(0x20746d66);
-        // format chunk length
-        setUint32(16);
-        // sample format (raw)
-        setUint16(1);
-        // channel count
+        // WAV header
+        setUint32(0x46464952); // "RIFF"
+        setUint32(length - 8); // file length - 8
+        setUint32(0x45564157); // "WAVE"
+        setUint32(0x20746d66); // "fmt " chunk
+        setUint32(16); // length = 16
+        setUint16(1); // PCM
         setUint16(buffer.numberOfChannels);
-        // sample rate
         setUint32(buffer.sampleRate);
-        // byte rate (sample rate * block align)
-        setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels);
-        // block align (channel count * bytes per sample)
-        setUint16(buffer.numberOfChannels * 2);
-        // bits per sample
-        setUint16(16);
-        // data chunk identifier
-        setUint32(0x61746164);
-        // data chunk length
+        setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // byte rate
+        setUint16(buffer.numberOfChannels * 2); // block align
+        setUint16(16); // bits per sample
+        setUint32(0x61746164); // "data" chunk
         setUint32(length - pos - 4);
 
-        // Write interleaved data
+        // Write audio data
+        const channels = [];
         for (let i = 0; i < buffer.numberOfChannels; i++) {
             channels.push(buffer.getChannelData(i));
         }
 
+        let offset = 0;
         while (pos < length) {
             for (let i = 0; i < buffer.numberOfChannels; i++) {
                 let sample = Math.max(-1, Math.min(1, channels[i][offset]));
@@ -104,183 +59,92 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
             offset++;
         }
 
-        return arrayBuffer;
+        return wav;
     };
 
     const startRecording = async () => {
         try {
-            const constraints = {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    sampleRate: { ideal: 48000 }
-                }
-            };
-
-            console.log("Requesting microphone access...");
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            console.log("Microphone access granted");
-            
-            streamRef.current = stream;
-            setPermissionGranted(true);
-
-            // Приоритет форматам, которые лучше поддерживаются
-            const mimeTypes = [
-                'audio/webm;codecs=opus',
-                'audio/webm',
-                'audio/ogg;codecs=opus',
-                'audio/mp4'
-            ];
-
-            let selectedMimeType = '';
-            for (const mimeType of mimeTypes) {
-                if (MediaRecorder.isTypeSupported(mimeType)) {
-                    selectedMimeType = mimeType;
-                    console.log("Selected MIME type:", mimeType);
-                    break;
-                }
-            }
-
-            if (!selectedMimeType) {
-                throw new Error("No supported audio format found");
-            }
-
-            const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: selectedMimeType,
-                audioBitsPerSecond: 128000
+                    sampleRate: 44100
+                } 
             });
             
-            mediaRecorderRef.current = mediaRecorder;
+            streamRef.current = stream;
             audioChunksRef.current = [];
+            
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
 
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
-                    console.log("Audio chunk received:", event.data.size, "bytes");
                     audioChunksRef.current.push(event.data);
                 }
             };
 
             mediaRecorder.onstop = async () => {
-                console.log("Recording stopped, total chunks:", audioChunksRef.current.length);
-                
-                if (audioChunksRef.current.length === 0) {
-                    toast.error("No audio data recorded");
-                    return;
-                }
-
-                const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
-                console.log("Audio blob created:", audioBlob.size, "bytes");
-
-                if (audioBlob.size === 0) {
-                    toast.error("Recording failed - no audio data");
-                    return;
-                }
-
                 try {
-                    // Конвертируем в WAV для лучшей совместимости
-                    console.log("Converting to WAV...");
-                    const wavBlob = await convertToWav(audioBlob);
-                    console.log("WAV blob created:", wavBlob.size, "bytes");
-
+                    const audioBlob = new Blob(audioChunksRef.current);
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    
+                    // Конвертируем в WAV
+                    const wavBuffer = audioBufferToWav(audioBuffer);
+                    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                    
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        console.log("Audio converted to base64");
                         onAudioReady({
                             base64: reader.result,
                             duration: recordingTime
                         });
-                    };
-                    reader.onerror = (error) => {
-                        console.error("FileReader error:", error);
-                        toast.error("Failed to process audio");
                     };
                     reader.readAsDataURL(wavBlob);
-                } catch (conversionError) {
-                    console.error("WAV conversion failed, using original:", conversionError);
-                    // Если конвертация не удалась, отправляем оригинал
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        onAudioReady({
-                            base64: reader.result,
-                            duration: recordingTime
-                        });
-                    };
-                    reader.readAsDataURL(audioBlob);
+                    
+                } catch (error) {
+                    console.error("Conversion error:", error);
+                    toast.error("Failed to process audio");
                 }
                 
                 if (streamRef.current) {
-                    streamRef.current.getTracks().forEach(track => {
-                        console.log("Stopping track:", track.label);
-                        track.stop();
-                    });
+                    streamRef.current.getTracks().forEach(track => track.stop());
                 }
             };
 
-            mediaRecorder.onerror = (event) => {
-                console.error("MediaRecorder error:", event.error);
-                toast.error("Recording error: " + event.error.name);
-            };
-
-            mediaRecorder.start(1000);
-            console.log("Recording started, state:", mediaRecorder.state);
-            
+            mediaRecorder.start();
             setIsRecording(true);
             setRecordingTime(0);
 
             timerRef.current = setInterval(() => {
-                setRecordingTime(prev => {
-                    const newTime = prev + 1;
-                    console.log("Recording time:", newTime);
-                    return newTime;
-                });
+                setRecordingTime(prev => prev + 1);
             }, 1000);
 
-            toast.success("Recording started");
+            toast.success("Recording...");
 
         } catch (error) {
-            console.error("Error accessing microphone:", error);
-            setPermissionGranted(false);
-            
-            let errorMessage = "Could not access microphone";
-            
-            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                errorMessage = "Microphone permission denied. Please allow microphone access in browser settings.";
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                errorMessage = "No microphone found. Please connect a microphone.";
-            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                errorMessage = "Microphone is being used by another application.";
-            } else if (error.message) {
-                errorMessage = error.message;
-            }
-            
-            toast.error(errorMessage);
+            console.error("Microphone error:", error);
+            toast.error("Microphone access denied");
         }
     };
 
     const stopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
-            console.log("Stopping recording...");
-            
-            if (mediaRecorderRef.current.state === 'recording') {
-                mediaRecorderRef.current.stop();
-            }
-            
+            mediaRecorderRef.current.stop();
             setIsRecording(false);
             clearInterval(timerRef.current);
         }
     };
 
     const cancelRecording = () => {
-        console.log("Canceling recording...");
-        
         if (mediaRecorderRef.current && isRecording) {
-            if (mediaRecorderRef.current.state === 'recording') {
-                mediaRecorderRef.current.ondataavailable = null;
-                mediaRecorderRef.current.onstop = null;
-                mediaRecorderRef.current.stop();
-            }
-            
+            mediaRecorderRef.current.ondataavailable = null;
+            mediaRecorderRef.current.onstop = null;
+            mediaRecorderRef.current.stop();
             setIsRecording(false);
             clearInterval(timerRef.current);
             
@@ -288,15 +152,12 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
         }
-        
         onCancel();
     };
 
     useEffect(() => {
         return () => {
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-            }
+            if (timerRef.current) clearInterval(timerRef.current);
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
@@ -314,8 +175,7 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
             {!isRecording ? (
                 <button
                     onClick={startRecording}
-                    disabled={permissionGranted === false}
-                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
                 >
                     <MicIcon className="w-5 h-5" />
                     <span>Start Recording</span>
@@ -338,7 +198,6 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                     <button
                         onClick={stopRecording}
                         className="bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded-lg transition-colors"
-                        title="Stop and send"
                     >
                         <StopCircleIcon className="w-5 h-5" />
                     </button>
@@ -346,17 +205,10 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                     <button
                         onClick={cancelRecording}
                         className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-colors"
-                        title="Cancel recording"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
                 </>
-            )}
-            
-            {permissionGranted === false && (
-                <p className="text-xs text-red-400 ml-2">
-                    Microphone access required
-                </p>
             )}
         </div>
     );
