@@ -39,8 +39,10 @@ app.use(helmet({
 
 // Make ready for deployment
 if (process.env.NODE_ENV === "production") {
-    // Теперь путь идет от корня прямо в папку frontend/dist
-   const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
+    // Используем path.resolve для абсолютного пути от корня проекта
+    const frontendDistPath = path.resolve(__dirname, "..", "..", "frontend", "dist");
+    
+    console.log("Looking for frontend at:", frontendDistPath); // для отладки
     
     app.use(express.static(frontendDistPath));
 
