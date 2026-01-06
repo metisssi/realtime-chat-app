@@ -62,18 +62,30 @@ export const sendMessage = async (req, res) => {
 
         if (audio) {
             try {
-                console.log("Uploading WAV audio to Cloudinary...");
+                console.log("Starting audio upload to Cloudinary...");
+                console.log("Audio data preview:", audio.substring(0, 100));
                 
-                // Загружаем WAV файл
+                // Загружаем аудио файл
                 const uploadResponse = await cloudinary.uploader.upload(audio, {
-                    resource_type: "video",
-                    format: "wav"
+                    resource_type: "video", // Cloudinary использует "video" для всех аудио
+                    folder: "chat_audio",
+                    allowed_formats: ["mp3", "wav", "ogg", "webm", "m4a", "aac"],
                 })
                 
                 audioUrl = uploadResponse.secure_url
-                console.log("WAV audio uploaded:", audioUrl)
+                console.log("Audio uploaded successfully:", {
+                    url: audioUrl,
+                    format: uploadResponse.format,
+                    resource_type: uploadResponse.resource_type,
+                    bytes: uploadResponse.bytes
+                });
+                
             } catch (uploadError) {
-                console.error("Upload error:", uploadError)
+                console.error("Audio upload error:", {
+                    message: uploadError.message,
+                    stack: uploadError.stack,
+                    error: uploadError
+                })
                 return res.status(500).json({ 
                     message: "Failed to upload audio",
                     error: uploadError.message 
@@ -87,7 +99,7 @@ export const sendMessage = async (req, res) => {
             text,
             image: imageUrl,
             audio: audioUrl,
-            audioDuration,
+            audioDuration: audioDuration || 0,
         });
 
         await newMessage.save();

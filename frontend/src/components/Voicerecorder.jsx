@@ -7,60 +7,8 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
     const [recordingTime, setRecordingTime] = useState(0);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
-    const audioContextRef = useRef(null);
     const timerRef = useRef(null);
     const streamRef = useRef(null);
-
-    // Конвертация в WAV
-    const audioBufferToWav = (buffer) => {
-        const length = buffer.length * buffer.numberOfChannels * 2 + 44;
-        const wav = new ArrayBuffer(length);
-        const view = new DataView(wav);
-        
-        let pos = 0;
-        const setUint16 = (data) => {
-            view.setUint16(pos, data, true);
-            pos += 2;
-        };
-        const setUint32 = (data) => {
-            view.setUint32(pos, data, true);
-            pos += 4;
-        };
-
-        // WAV header
-        setUint32(0x46464952); // "RIFF"
-        setUint32(length - 8); // file length - 8
-        setUint32(0x45564157); // "WAVE"
-        setUint32(0x20746d66); // "fmt " chunk
-        setUint32(16); // length = 16
-        setUint16(1); // PCM
-        setUint16(buffer.numberOfChannels);
-        setUint32(buffer.sampleRate);
-        setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // byte rate
-        setUint16(buffer.numberOfChannels * 2); // block align
-        setUint16(16); // bits per sample
-        setUint32(0x61746164); // "data" chunk
-        setUint32(length - pos - 4);
-
-        // Write audio data
-        const channels = [];
-        for (let i = 0; i < buffer.numberOfChannels; i++) {
-            channels.push(buffer.getChannelData(i));
-        }
-
-        let offset = 0;
-        while (pos < length) {
-            for (let i = 0; i < buffer.numberOfChannels; i++) {
-                let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-                sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-                view.setInt16(pos, sample, true);
-                pos += 2;
-            }
-            offset++;
-        }
-
-        return wav;
-    };
 
     const startRecording = async () => {
         try {
@@ -76,7 +24,21 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
             streamRef.current = stream;
             audioChunksRef.current = [];
             
-            const mediaRecorder = new MediaRecorder(stream);
+            // Используем webm/opus для лучшей совместимости
+            const options = { mimeType: 'audio/webm;codecs=opus' };
+            
+            // Если браузер не поддерживает webm, пробуем другие форматы
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'audio/webm';
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'audio/ogg;codecs=opus';
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options.mimeType = ''; // Используем формат по умолчанию
+                    }
+                }
+            }
+            
+            const mediaRecorder = new MediaRecorder(stream, options);
             mediaRecorderRef.current = mediaRecorder;
 
             mediaRecorder.ondataavailable = (event) => {
@@ -87,16 +49,17 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
 
             mediaRecorder.onstop = async () => {
                 try {
-                    const audioBlob = new Blob(audioChunksRef.current);
-                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    // Создаем blob из записанных данных
+                    const audioBlob = new Blob(audioChunksRef.current, { 
+                        type: mediaRecorderRef.current.mimeType || 'audio/webm'
+                    });
                     
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    console.log("Audio blob created:", {
+                        size: audioBlob.size,
+                        type: audioBlob.type
+                    });
                     
-                    // Конвертируем в WAV
-                    const wavBuffer = audioBufferToWav(audioBuffer);
-                    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-                    
+                    // Конвертируем в base64
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         onAudioReady({
@@ -104,10 +67,10 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                             duration: recordingTime
                         });
                     };
-                    reader.readAsDataURL(wavBlob);
+                    reader.readAsDataURL(audioBlob);
                     
                 } catch (error) {
-                    console.error("Conversion error:", error);
+                    console.error("Processing error:", error);
                     toast.error("Failed to process audio");
                 }
                 
@@ -121,10 +84,16 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
             setRecordingTime(0);
 
             timerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
+                setRecordingTime(prev => {
+                    if (prev >= 60) { // Максимум 60 секунд
+                        stopRecording();
+                        return prev;
+                    }
+                    return prev + 1;
+                });
             }, 1000);
 
-            toast.success("Recording...");
+            toast.success("Recording started");
 
         } catch (error) {
             console.error("Microphone error:", error);
@@ -198,6 +167,7 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                     <button
                         onClick={stopRecording}
                         className="bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded-lg transition-colors"
+                        title="Stop and send"
                     >
                         <StopCircleIcon className="w-5 h-5" />
                     </button>
@@ -205,6 +175,7 @@ function VoiceRecorder({ onAudioReady, onCancel }) {
                     <button
                         onClick={cancelRecording}
                         className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-colors"
+                        title="Cancel recording"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
