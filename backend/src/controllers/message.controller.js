@@ -62,22 +62,29 @@ export const sendMessage = async (req, res) => {
 
         if (audio) {
             try {
-                console.log("Начало загрузки аудио в Cloudinary...");
+                // 1. Убираем заголовок и создаем Buffer
+                const base64String = audio.split(",")[1];
+                const audioBuffer = Buffer.from(base64String, "base64");
 
-                // Очищаем строку: заменяем сложный заголовок на стандартный
-                const base64Data = audio.replace(/^data:audio\/webm;codecs=opus;base64,/, "data:audio/webm;base64,");
-
-                const uploadResponse = await cloudinary.uploader.upload(base64Data, {
-                    resource_type: "video", // Обязательно для аудио
-                    folder: "chat_audio",
+                // 2. Загружаем через поток (stream)
+                const uploadResponse = await new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        {
+                            resource_type: "video", // Cloudinary требует 'video' для аудио
+                            folder: "chat_audio",
+                            format: "webm", // Явно фиксируем формат
+                        },
+                        (error, result) => {
+                            if (error) reject(error);
+                            else resolve(result);
+                        }
+                    );
+                    stream.end(audioBuffer);
                 });
 
-                audioUrl = uploadResponse.secure_url;
-                console.log("Аудио успешно загружено:", audioUrl);
-
-            } catch (uploadError) {
-                console.error("Детальная ошибка Cloudinary:", uploadError);
-                return res.status(500).json({ message: "Ошибка загрузки аудио" });
+                audioUrl = uploadResponse.secure_url; // Используем HTTPS ссылку
+            } catch (error) {
+                console.error("Cloudinary upload error:", error);
             }
         }
 
