@@ -39,17 +39,17 @@ export const sendMessage = async (req, res) => {
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
-        if(!text && !image && !audio) {
-            return res.status(400).json({ message: "Text, image or audio is required"})
+        if (!text && !image && !audio) {
+            return res.status(400).json({ message: "Text, image or audio is required" })
         }
 
         if (senderId.equals(receiverId)) {
-            return res.status(404).json({ message: "Receiver not found"})
+            return res.status(404).json({ message: "Receiver not found" })
         }
 
-        const receiverExists = await User.exists({ _id: receiverId})
-        if(!receiverExists) {
-            return res.status(400).json({ message: 'Receiver not found.'})
+        const receiverExists = await User.exists({ _id: receiverId })
+        if (!receiverExists) {
+            return res.status(400).json({ message: 'Receiver not found.' })
         }
 
         let imageUrl
@@ -62,34 +62,22 @@ export const sendMessage = async (req, res) => {
 
         if (audio) {
             try {
-                console.log("Starting audio upload to Cloudinary...");
-                console.log("Audio data preview:", audio.substring(0, 100));
-                
-                // Загружаем аудио файл
-                const uploadResponse = await cloudinary.uploader.upload(audio, {
-                    resource_type: "video", // Cloudinary использует "video" для всех аудио
+                console.log("Начало загрузки аудио в Cloudinary...");
+
+                // Очищаем строку: заменяем сложный заголовок на стандартный
+                const base64Data = audio.replace(/^data:audio\/webm;codecs=opus;base64,/, "data:audio/webm;base64,");
+
+                const uploadResponse = await cloudinary.uploader.upload(base64Data, {
+                    resource_type: "video", // Обязательно для аудио
                     folder: "chat_audio",
-                    allowed_formats: ["mp3", "wav", "ogg", "webm", "m4a", "aac"],
-                })
-                
-                audioUrl = uploadResponse.secure_url
-                console.log("Audio uploaded successfully:", {
-                    url: audioUrl,
-                    format: uploadResponse.format,
-                    resource_type: uploadResponse.resource_type,
-                    bytes: uploadResponse.bytes
                 });
-                
+
+                audioUrl = uploadResponse.secure_url;
+                console.log("Аудио успешно загружено:", audioUrl);
+
             } catch (uploadError) {
-                console.error("Audio upload error:", {
-                    message: uploadError.message,
-                    stack: uploadError.stack,
-                    error: uploadError
-                })
-                return res.status(500).json({ 
-                    message: "Failed to upload audio",
-                    error: uploadError.message 
-                })
+                console.error("Детальная ошибка Cloudinary:", uploadError);
+                return res.status(500).json({ message: "Ошибка загрузки аудио" });
             }
         }
 
@@ -105,7 +93,7 @@ export const sendMessage = async (req, res) => {
         await newMessage.save();
 
         const recieverSocketId = getRecieverSocketId(receiverId)
-        if(recieverSocketId) {
+        if (recieverSocketId) {
             io.to(recieverSocketId).emit("newMessage", newMessage)
         }
 
@@ -117,26 +105,26 @@ export const sendMessage = async (req, res) => {
 }
 
 export const getChatPartners = async (req, res) => {
-  try {
-    const loggedInUserId = req.user._id;
-    const messages = await Message.find({
-      $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }],
-    });
+    try {
+        const loggedInUserId = req.user._id;
+        const messages = await Message.find({
+            $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }],
+        });
 
-    const chatPartnerIds = [
-      ...new Set(
-        messages.map((msg) =>
-          msg.senderId.toString() === loggedInUserId.toString()
-            ? msg.receiverId.toString()
-            : msg.senderId.toString()
-        )
-      ),
-    ];
+        const chatPartnerIds = [
+            ...new Set(
+                messages.map((msg) =>
+                    msg.senderId.toString() === loggedInUserId.toString()
+                        ? msg.receiverId.toString()
+                        : msg.senderId.toString()
+                )
+            ),
+        ];
 
-    const chatPartners = await User.find({ _id: { $in: chatPartnerIds } }).select("-password");
-    res.status(200).json(chatPartners);
-  } catch (error) {
-    console.error("Error in getChatPartners: ", error.message);
-    res.status(500).json({ error: "Internal server error" });
-  }
+        const chatPartners = await User.find({ _id: { $in: chatPartnerIds } }).select("-password");
+        res.status(200).json(chatPartners);
+    } catch (error) {
+        console.error("Error in getChatPartners: ", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
 };

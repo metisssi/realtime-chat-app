@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { PlayIcon, PauseIcon, Volume2Icon } from "lucide-react";
+import { PlayIcon, PauseIcon, Volume2Icon, XIcon } from "lucide-react";
 import toast from "react-hot-toast";
 
 function AudioMessage({ audioUrl, duration, isSent }) {
@@ -127,10 +127,11 @@ function AudioMessage({ audioUrl, duration, isSent }) {
                 preload="metadata"
                 crossOrigin="anonymous"
             >
+                <source src={audioUrl} type="audio/mpeg" />
+                <source src={audioUrl} type="audio/mp3" />
                 <source src={audioUrl} type="audio/webm" />
                 <source src={audioUrl} type="audio/ogg" />
                 <source src={audioUrl} type="audio/wav" />
-                <source src={audioUrl} type="audio/mpeg" />
                 Your browser does not support the audio element.
             </audio>
             
