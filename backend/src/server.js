@@ -21,6 +21,7 @@ const PORT = ENV.PORT || 3000
 
 app.use(mongoSanitize()) // protection against NoSQL injection
 app.use(express.json({ limit: "50mb"})) // req.body
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({origin:ENV.CLIENT_URL, credentials: true}))
 app.use(cookieParser())
 
@@ -30,14 +31,18 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
+            // Разрешаем изображения из Cloudinary
             imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
-            mediaSrc: ["'self'", "https://res.cloudinary.com"], // РАЗРЕШАЕМ АУДИО
+            // Разрешаем аудио и видео из Cloudinary
+            mediaSrc: ["'self'", "https://res.cloudinary.com"],
             scriptSrc: ["'self'", "'unsafe-inline'"],
-            connectSrc: ["'self'", "https://res.cloudinary.com", "wss://ваш-сайт.onrender.com"], // Для сокетов
+            // Разрешаем сокеты (подставляем динамически или используем '*')
+            connectSrc: ["'self'", "https://res.cloudinary.com", "wss://*.onrender.com", "https://*.onrender.com"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            fontSrc: ["'self'", "https:", "data:"],
         }
     }
 }));
-
 // Make ready for deployment
 if (process.env.NODE_ENV === "production") {
     // __dirname сейчас это /opt/render/project/src/backend/src
