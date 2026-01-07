@@ -70,9 +70,11 @@ export const sendMessage = async (req, res) => {
                 const uploadResponse = await new Promise((resolve, reject) => {
                     const stream = cloudinary.uploader.upload_stream(
                         {
-                            resource_type: "video", // Cloudinary требует 'video' для аудио
+                            resource_type: "video",
                             folder: "chat_audio",
-                            format: "webm", // Явно фиксируем формат
+                            // Измените на mp3 или m4a для максимальной совместимости с телефонами
+                            format: "mp3",
+                            transformation: [{ bit_rate: "64k" }]
                         },
                         (error, result) => {
                             if (error) reject(error);
