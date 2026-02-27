@@ -59,7 +59,7 @@ Modern real-time messaging app with image sharing and animated UI.
 
 8. **Online Status** - See when users go offline in real-time
    
-   <img width="800" alt="Offline Status" src="https://github.com/user-attachments/assets/87dd476d-df72-41c4-86e6-6e5b69c5eb54" />
+
 
 ## 🚀 Local Setup
 
