@@ -19,7 +19,7 @@ Modern real-time messaging app with image sharing and animated UI.
 
 ## 🌐 Live Demo
 
-**Try it here:** https://realtime-chat-app-r3d2x.sevalla.app/login
+[**Try it here:** https://realtime-chat-app-r3d2x.sevalla.app/login](https://realtime-chat-app-j3sb.onrender.com/)
 
 ### 📸 How to Use
 
