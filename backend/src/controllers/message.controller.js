@@ -2,31 +2,28 @@ import cloudinary from "../lib/cloudinary.js"
 import { getRecieverSocketId, io } from "../lib/socket.js"
 import Message from "../models/Message.js"
 import User from "../models/User.js"
+import { encrypt, decrypt } from "../lib/encryption.js" // ← přidej import
 
-export const getAllContacts = async (req, res) => {
-    try {
-        const loggedInUserId = req.user._id
-        const filteredUsers = await User.find({
-            _id: { $ne: loggedInUserId }
-        }).select("-password")
-        res.status(200).json(filteredUsers)
-    } catch (error) {
-        console.log("Error in getAllContact:", error);
-        res.status(500).json({ message: "Server error" })
-    }
-}
-
+// getMessagesByUserId — dešifruj před odesláním na frontend
 export const getMessagesByUserId = async (req, res) => {
     try {
         const myId = req.user._id;
         const { id: userToChatId } = req.params
-        const message = await Message.find({
+        const messages = await Message.find({
             $or: [
                 { senderId: myId, receiverId: userToChatId },
                 { senderId: userToChatId, receiverId: myId },
             ]
         });
-        res.status(200).json(message)
+
+        // dešifruj text a audio URL každé zprávy
+        const decryptedMessages = messages.map(msg => ({
+            ...msg._doc,
+            text: msg.text ? decrypt(msg.text) : null,
+            audio: msg.audio ? decrypt(msg.audio) : null
+        }))
+
+        res.status(200).json(decryptedMessages)
     } catch (error) {
         console.log("Error in getMessage controller:", error.message)
         res.status(500).json({ error: "Internal server error" })
@@ -62,17 +59,14 @@ export const sendMessage = async (req, res) => {
 
         if (audio) {
             try {
-                // 1. Убираем заголовок и создаем Buffer
                 const base64String = audio.split(",")[1];
                 const audioBuffer = Buffer.from(base64String, "base64");
 
-                // 2. Загружаем через поток (stream)
                 const uploadResponse = await new Promise((resolve, reject) => {
                     const stream = cloudinary.uploader.upload_stream(
                         {
                             resource_type: "video",
                             folder: "chat_audio",
-                            // Измените на mp3 или m4a для максимальной совместимости с телефонами
                             format: "mp3",
                             transformation: [{ bit_rate: "64k" }]
                         },
@@ -84,7 +78,7 @@ export const sendMessage = async (req, res) => {
                     stream.end(audioBuffer);
                 });
 
-                audioUrl = uploadResponse.secure_url; // Используем HTTPS ссылку
+                audioUrl = uploadResponse.secure_url;
             } catch (error) {
                 console.error("Cloudinary upload error:", error);
             }
@@ -93,23 +87,45 @@ export const sendMessage = async (req, res) => {
         const newMessage = new Message({
             senderId,
             receiverId,
-            text,
+            text: text ? encrypt(text) : undefined,       // šifruj text před uložením
             image: imageUrl,
-            audio: audioUrl,
+            audio: audioUrl ? encrypt(audioUrl) : undefined, // šifruj audio URL před uložením
             audioDuration: audioDuration || 0,
         });
 
         await newMessage.save();
 
-        const recieverSocketId = getRecieverSocketId(receiverId)
-        if (recieverSocketId) {
-            io.to(recieverSocketId).emit("newMessage", newMessage)
+        // pro socket pošli dešifrovanou verzi (frontend to rovnou zobrazí)
+        const messageForSocket = {
+            ...newMessage._doc,
+            text: text || null,      // plaintext pro real-time zobrazení
+            audio: audioUrl || null  // plaintext audio URL pro real-time zobrazení
         }
 
-        res.status(201).json(newMessage)
+        const recieverSocketId = getRecieverSocketId(receiverId)
+        if (recieverSocketId) {
+            io.to(recieverSocketId).emit("newMessage", messageForSocket)
+        }
+
+        res.status(201).json(messageForSocket) // ← vrať plaintext, ne šifrované
+
     } catch (error) {
         console.log("Error in sendMessage controller:", error.message)
         res.status(500).json({ error: "Internal server error" })
+    }
+}
+
+// getAllContacts a getChatPartners zůstávají beze změny
+export const getAllContacts = async (req, res) => {
+    try {
+        const loggedInUserId = req.user._id
+        const filteredUsers = await User.find({
+            _id: { $ne: loggedInUserId }
+        }).select("-password")
+        res.status(200).json(filteredUsers)
+    } catch (error) {
+        console.log("Error in getAllContact:", error);
+        res.status(500).json({ message: "Server error" })
     }
 }
 
